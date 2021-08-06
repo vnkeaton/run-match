@@ -1,4 +1,4 @@
-package biometricMatch
+package matchClient
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ const (
 )
 
 // Client
-type Client struct {
+/*type Client struct {
 	apiKey     string
 	baseURL    string
 	userAgent  string
@@ -35,7 +35,7 @@ func NewClient(apiKey string) *Client {
 		},
 		baseURL: BaseURL,
 	}
-}
+}*/
 
 type errorResponse struct {
 	Timestamp time.Time `json:"timestamp"`
@@ -50,7 +50,7 @@ type successResponse struct {
 	FileId2     string `json:"fileId1"`
 }
 
-func helloViki() {
+func HelloViki() {
 
 	//Basic HTTP Get request
 	url := BaseURL + "/hello/Viki"

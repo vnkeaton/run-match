@@ -1,8 +1,8 @@
 package main
 
-import "biometricMatch"
+import "github.com/vnkeaton/run-match/matchClient"
 
 func main() {
-	biometricMatch.HelloViki()
+	matchClient.HelloViki()
 
 }
