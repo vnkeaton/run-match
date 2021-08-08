@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 
-	//memory "github.com/go-git/go-git/storage/memory"
 	"github.com/vnkeaton/biometric-match-client/matchclient"
 )
 
