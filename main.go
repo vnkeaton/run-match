@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -15,8 +16,11 @@ const (
 	imagesDir = "/images/"
 )
 
-//var storer *memory.Storage
-//var fs billy.Filesystem
+type MatchScoreData struct {
+	FileName1  string
+	FileName2  string
+	FatchScore float64
+}
 
 func reverseArray(arr []os.FileInfo) []os.FileInfo {
 	// reverse file name array
@@ -68,7 +72,7 @@ func main() {
 
 	fmt.Println("working directory is: " + path)
 
-	// read in list of images
+	//read in list of images
 	files, err := ioutil.ReadDir(path + imagesDir)
 	if err != nil {
 		log.Fatal(err)
@@ -78,23 +82,54 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	//reverse the list of names
 	reverseArray(revFiles)
 
+	//match each file
+	//this will only match 2 unique files as there is no since in duplicating - triangular comparison
 	for _, f := range files {
 		revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
 
 			fmt.Println("Comparing " + f.Name() + " with " + r.Name())
 			mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, r.Name())}
-			matchClient.MatchFiles(mediaFiles)
-			//err := matchClient.PostThisFile(mustOpen(path, f.Name()), mustOpen(path, r.Name())
-			//if err != nil {
-			//	panic(err)
-			//}
 
+			fmt.Println("calling match client....")
+			matchScore, err := matchClient.MatchFiles(mediaFiles)
+			if err != nil {
+				fmt.Println("error from matchClient")
+				log.Fatal(err)
+			}
+			fmt.Println("======= match score data =======")
+			fmt.Println("FileName1=" + matchScore.FileName1)
+			fmt.Println("FileName2=" + matchScore.FileName2)
+			fmt.Printf("MatchScore%f\n", matchScore.MatchScore)
+			/*if s, err := strconv.ParseFloat(matchScore.MatchScore, 64); err == nil {
+				fmt.Println("MatchScore=" + s) // 3.14159265
+			}*/
 		}
-
 	}
+	//get the  1-1 comparisons, although they should be 0 (zero)
+	for _, f := range files {
+		fmt.Println("Comparing " + f.Name() + " with " + f.Name())
+		mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, f.Name())}
+		matchScore, err := matchClient.MatchFiles(mediaFiles)
+		if err != nil {
+			fmt.Println("error from matchClient")
+			log.Fatal(err)
+		}
+		fmt.Println("======= match score data =======")
+		fmt.Println("FileName1=" + matchScore.FileName1)
+		fmt.Println("FileName2=" + matchScore.FileName2)
+		fmt.Printf("MatchSCore=%f\n", matchScore.MatchScore)
+	}
+
+	//get match score results
+	allMatchScores, err := matchClient.GetAllMatchScores()
+	if err != nil {
+		fmt.Println("error from matchClient getting all match score data")
+	}
+	s, _ := json.MarshalIndent(allMatchScores, "", "\t")
+	fmt.Print(string(s))
+
 }
