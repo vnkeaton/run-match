@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	facesURL = "https://github.com/TheMdTF/mdtf-public/tree/master/rally2-matching-system/tests/test-routine-images/face"
+	facesURL  = "https://github.com/TheMdTF/mdtf-public/tree/master/rally2-matching-system/tests/test-routine-images/face"
+	imagesDir = "/images/"
 )
 
 //var storer *memory.Storage
@@ -29,8 +30,20 @@ func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
 	return append(arr[:index], arr[index+1:]...)
 }
 
+//func mustOpen(f string) *os.File {
+func mustOpen(p string, f string) string {
+	filename := p + imagesDir + f
+	fmt.Println("check to see if filename exists with mustOpen for: " + filename)
+	_, err := os.Open(filename)
+	if err != nil {
+		fmt.Println("This file failed upon mustOpen: " + filename)
+		log.Fatal(err)
+	}
+	return filename
+}
+
 func main() {
-	matchClient.HelloViki()
+	matchClient.Hello()
 
 	// TODO cloning the faces repo is not working.  Come back to this.
 	/*err := os.Mkdir("/tmp/foo", 0755)
@@ -47,13 +60,21 @@ func main() {
 	}
 	*/
 
+	path, err := os.Getwd()
+	if err != nil {
+		fmt.Println("error in determing working directory")
+		log.Fatal(err)
+	}
+
+	fmt.Println("working directory is: " + path)
+
 	// read in list of images
-	files, err := ioutil.ReadDir("./images")
+	files, err := ioutil.ReadDir(path + imagesDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	revFiles, err := ioutil.ReadDir("./images")
+	revFiles, err := ioutil.ReadDir(path + imagesDir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,10 +83,22 @@ func main() {
 	reverseArray(revFiles)
 
 	for _, f := range files {
+		////
+		//matchClient.PostThisFile(mustOpen(path, f.Name()))
+		/////
+
 		revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
-			fmt.Println("Comparing " + f.Name() + " with " + r.Name())
-		}
-	}
 
+			fmt.Println("Comparing " + f.Name() + " with " + r.Name())
+			mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, r.Name())}
+			matchClient.MatchFiles(mediaFiles)
+			//err := matchClient.PostThisFile(mustOpen(path, f.Name()), mustOpen(path, r.Name())
+			//if err != nil {
+			//	panic(err)
+			//}
+
+		}
+
+	}
 }
