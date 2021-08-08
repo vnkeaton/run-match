@@ -83,10 +83,6 @@ func main() {
 	reverseArray(revFiles)
 
 	for _, f := range files {
-		////
-		//matchClient.PostThisFile(mustOpen(path, f.Name()))
-		/////
-
 		revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
 

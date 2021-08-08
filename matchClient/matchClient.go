@@ -13,9 +13,6 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -171,14 +168,6 @@ func UploadFiles(dst string, values []string) (err error) {
 	return nil
 }
 
-func mustOpen(f string) *os.File {
-	r, err := os.Open(f)
-	if err != nil {
-		panic(err)
-	}
-	return r
-}
-
 func DumpRequest(req *http.Request) {
 
 	output, err := httputil.DumpRequest(req, false)
@@ -194,138 +183,4 @@ func DumpRequest(req *http.Request) {
 //https://gist.github.com/mattetti/5914158/f4d1393d83ebedc682a3c8e7bdc6b49670083b84
 //https://pkg.go.dev/net/http
 //https://ayada.dev/posts/multipart-requests-in-go/
-
-func PostThisFile(fname string) {
-	dst := BaseURL + "/uploadFile"
-	err := post(dst, fname)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-func post(dst string, fname string) error {
-	u, err := url.Parse(dst)
-	if err != nil {
-		return fmt.Errorf("failed to parse destination url: %w", err)
-	}
-
-	form, err := makeRequestBody(fname)
-	if err != nil {
-		return fmt.Errorf("failed to prepare request body: %w", err)
-	}
-
-	hdr := make(http.Header)
-	hdr.Set("Content-Type", form.contentType)
-
-	q := u.Query()
-	//q.Set("access_token", token)
-	u.RawQuery = q.Encode()
-
-	req := http.Request{
-		Method:        "POST",
-		URL:           u,
-		Header:        hdr,
-		Body:          ioutil.NopCloser(form.body),
-		ContentLength: int64(form.contentLen),
-	}
-
-	DumpRequest(&req)
-
-	resp, err := http.DefaultClient.Do(&req)
-	if err != nil {
-		return fmt.Errorf("failed to perform http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	_, _ = io.Copy(os.Stdout, resp.Body)
-
-	return nil
-}
-
-type form struct {
-	body        *bytes.Buffer
-	contentType string
-	contentLen  int
-}
-
-func makeRequestBody(fname string) (form, error) {
-	ct, err := getImageContentType(fname)
-	if err != nil {
-		return form{}, fmt.Errorf(
-			`failed to get content type for image file "%s": %w`,
-			fname, err)
-	}
-
-	fd, err := os.Open(fname)
-	if err != nil {
-		return form{}, fmt.Errorf("failed to open file to upload: %w", err)
-	}
-	defer fd.Close()
-
-	stat, err := fd.Stat()
-	if err != nil {
-		return form{}, fmt.Errorf("failed to query file info: %w", err)
-	}
-
-	hdr := make(textproto.MIMEHeader)
-	cd := mime.FormatMediaType("form-data", map[string]string{
-		"name":     "file",
-		"filename": fname,
-	})
-	hdr.Set("Content-Disposition", cd)
-	hdr.Set("Contnt-Type", ct)
-	hdr.Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
-
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-
-	part, err := mw.CreatePart(hdr)
-	if err != nil {
-		return form{}, fmt.Errorf("failed to create new form part: %w", err)
-	}
-
-	n, err := io.Copy(part, fd)
-	if err != nil {
-		return form{}, fmt.Errorf("failed to write form part: %w", err)
-	}
-
-	if int64(n) != stat.Size() {
-		return form{}, fmt.Errorf("file size changed while writing: %s", fd.Name())
-	}
-
-	err = mw.Close()
-	if err != nil {
-		return form{}, fmt.Errorf("failed to prepare form: %w", err)
-	}
-
-	return form{
-		body:        &buf,
-		contentType: mw.FormDataContentType(),
-		contentLen:  buf.Len(),
-	}, nil
-}
-
-var imageContentTypes = map[string]string{
-	"png":  "image/png",
-	"jpg":  "image/jpeg",
-	"jpeg": "image/jpeg",
-	"svg":  "image/svg+xml",
-}
-
-func getImageContentType(fname string) (string, error) {
-	ext := filepath.Ext(fname)
-	if ext == "" {
-		return "", fmt.Errorf("file name has no extension: %s", fname)
-	}
-
-	ext = strings.ToLower(ext[1:])
-	ct, found := imageContentTypes[ext]
-	if !found {
-		return "", fmt.Errorf("unknown file name extension: %s", ext)
-	}
-	return ct, nil
-}
-
-//reference:
 //https://stackoverflow.com/questions/63636454/golang-multipart-file-form-request
