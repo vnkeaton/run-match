@@ -86,9 +86,10 @@ func main() {
 	reverseArray(revFiles)
 
 	//match each file
-	//this will only match 2 unique files as there is no since in duplicating - triangular comparison
+
 	for _, f := range files {
-		revFiles = RemoveIndex(revFiles, len(revFiles)-1)
+		//triangular comparison for comparing unique files - do not assume the match operation is symmetric
+		//revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
 
 			fmt.Println("Comparing " + f.Name() + " with " + r.Name())
@@ -100,28 +101,10 @@ func main() {
 				fmt.Println("error from matchClient")
 				log.Fatal(err)
 			}
-			fmt.Println("======= match score data =======")
-			fmt.Println("FileName1=" + matchScore.FileName1)
-			fmt.Println("FileName2=" + matchScore.FileName2)
-			fmt.Printf("MatchScore%f\n", matchScore.MatchScore)
-			/*if s, err := strconv.ParseFloat(matchScore.MatchScore, 64); err == nil {
-				fmt.Println("MatchScore=" + s) // 3.14159265
-			}*/
+			s, _ := json.MarshalIndent(matchScore, "", "\t")
+			fmt.Print(string(s))
+			fmt.Print("\n")
 		}
-	}
-	//get the  1-1 comparisons, although they should be 0 (zero)
-	for _, f := range files {
-		fmt.Println("Comparing " + f.Name() + " with " + f.Name())
-		mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, f.Name())}
-		matchScore, err := matchClient.MatchFiles(mediaFiles)
-		if err != nil {
-			fmt.Println("error from matchClient")
-			log.Fatal(err)
-		}
-		fmt.Println("======= match score data =======")
-		fmt.Println("FileName1=" + matchScore.FileName1)
-		fmt.Println("FileName2=" + matchScore.FileName2)
-		fmt.Printf("MatchSCore=%f\n", matchScore.MatchScore)
 	}
 
 	//get match score results
@@ -131,5 +114,6 @@ func main() {
 	}
 	s, _ := json.MarshalIndent(allMatchScores, "", "\t")
 	fmt.Print(string(s))
+	fmt.Print("\n")
 
 }

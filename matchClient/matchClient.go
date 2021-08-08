@@ -191,7 +191,7 @@ func UploadFiles(dst string, values []string) (MatchScoreData, error) {
 		return MatchScoreData{}, fmt.Errorf("can not unmarshal Json: %w", err)
 	}
 
-	fmt.Println("should have some json??")
+	fmt.Println("return match score structure")
 
 	return MatchScoreData{
 		FileName1:  matchScore.FileName1,
