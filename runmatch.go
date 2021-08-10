@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -23,9 +22,8 @@ var storer *memory.Storage
 var origin billy.Filesystem
 
 const (
-	//facesURL  = "https://github.com/TheMdTF/mdtf-public/tree/master/rally2-matching-system/tests/test-routine-images/face"
 	facesURL  = "https://github.com/TheMdTF/mdtf-public"
-	imagesDir = "/images/"
+	imagesDir = "/tmp/images/"
 	repoDir   = "/rally2-matching-system/tests/test-routine-images/face"
 )
 
@@ -50,55 +48,27 @@ func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
 	return append(ret, arr[index+1:]...)
 }
 
-//func mustOpen(f string) {
-func mustOpen(f string) string {
-
-	fmt.Println("check to see if filename exists with mustOpen for: " + f)
-	_, err := origin.Open(f)
-	if err != nil {
-		fmt.Println("This file failed upon mustOpen: " + f)
-		log.Fatal(err)
-	}
-	return f
-}
-
-func checkError(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 func main() {
 	storer = memory.NewStorage()
 	origin = memfs.New()
 
 	matchclient.Hello("IDSL")
 
-	path, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Error getting pwd ", err)
-		log.Fatal(err)
-	}
-
 	//get the faces repo
-	imageFaces, err := downloadFaces(path)
+	err := downloadFaces()
 	if err != nil {
 		fmt.Println("Error from downloadFaces  ", err)
 		log.Fatal(err)
 	}
-	fmt.Println("faces downloaded")
-
-	//fmt.Println("working directory is: " + path)
 
 	//read in list of images
-	//fmt.Println("read in list of images from: " + path + imagesDir)
-	imageFaces, err = ioutil.ReadDir(path + imagesDir)
+	imageFaces, err := ioutil.ReadDir(imagesDir)
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
 	}
 
-	revFiles, err := ioutil.ReadDir(path + imagesDir)
+	revFiles, err := ioutil.ReadDir(imagesDir)
 	if err != nil {
 		fmt.Println("Error from read dir rev files ", err)
 		log.Fatal(err)
@@ -112,11 +82,8 @@ func main() {
 		//triangular comparison for comparing unique files - do not assume the match operation is symmetric
 		//revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
-			fmt.Println("Comparing " + path + imagesDir + f.Name() + " with " + path + imagesDir + r.Name())
-			//mediaFiles := []string{mustOpen(path + imagesDir + f.Name()), mustOpen(path + imagesDir + r.Name())}
-			mediaFiles := []string{path + imagesDir + f.Name(), path + imagesDir + r.Name()}
-			//mediaFiles := []string{mustOpen(repoDir, f.Name()), mustOpen(repoDir, r.Name())}
-			//matchScore, err := matchclient.MatchFiles(mediaFiles)
+			//fmt.Println("Comparing " + imagesDir + f.Name() + " with " + imagesDir + r.Name())
+			mediaFiles := []string{imagesDir + f.Name(), imagesDir + r.Name()}
 			_, err := matchclient.MatchFiles(mediaFiles)
 			if err != nil {
 				fmt.Println("error from matchclient")
@@ -146,7 +113,7 @@ func main() {
 
 }
 
-func downloadFaces(path string) ([]fs.FileInfo, error) {
+func downloadFaces() error {
 
 	storer = memory.NewStorage()
 	origin = memfs.New()
@@ -154,8 +121,10 @@ func downloadFaces(path string) ([]fs.FileInfo, error) {
 	_, err := git.Clone(storer, origin, &git.CloneOptions{
 		URL: facesURL,
 	})
-	checkError(err)
-	fmt.Println("Repository cloned")
+	if err != nil {
+		fmt.Println("Error from clone  ", err)
+		log.Fatal(err)
+	}
 
 	//read in list of images
 	memFaces, err := origin.ReadDir(repoDir)
@@ -163,43 +132,20 @@ func downloadFaces(path string) ([]fs.FileInfo, error) {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
 	}
-	//file, err := fs.Open("/rally2-matching-system/tests/test-routine-images/face/1.png")
-	//fmt.Println("we have an image file: " + file.Name())
-	//checkError(err)
 
-	fmt.Println("we have a list of image files from the repository")
-
-	/*for _, f := range memFaces {
-		fmt.Println("image file:" + f.Name())
-		fmt.Println("can I open them?")
-		_, err := origin.Open(repoDir + "/" + f.Name())
+	if _, err := os.Stat(imagesDir); os.IsNotExist(err) {
+		err := os.Mkdir(imagesDir, 0755)
 		if err != nil {
-			fmt.Println("NO!  Can not open.  DAMN")
-		} else {
-			fmt.Println("YEA!  It opened!")
+			fmt.Println("error mkdir for " + imagesDir)
+			log.Fatal(err)
 		}
 	}
-	return memFaces, nil
-	*/
-
-	fmt.Println("what is path + imagesDir: " + path + imagesDir)
-	if _, err := os.Stat(path + imagesDir); os.IsNotExist(err) {
-		err := os.Mkdir(path+imagesDir, 0755)
-		fmt.Println("error mkdir for " + path + imagesDir)
-		fmt.Println(err)
-	}
-	fmt.Println("new images directory created")
 
 	for _, f := range memFaces {
-		fmt.Println("file is: " + f.Name())
-		fmt.Println(f.Size())
-
 		ext := filepath.Ext(f.Name())
 		if ext != ".png" {
 			break
 		}
-
-		fmt.Println("ext is .png")
 
 		//open a file
 		src, err := origin.Open(repoDir + "/" + f.Name())
@@ -209,7 +155,7 @@ func downloadFaces(path string) ([]fs.FileInfo, error) {
 		}
 
 		//create a new file
-		dst, err := os.Create(path + imagesDir + "/" + f.Name())
+		dst, err := os.Create(imagesDir + "/" + f.Name())
 		if err != nil {
 			fmt.Println("Error from create: ", err)
 			log.Fatal(err)
@@ -231,14 +177,8 @@ func downloadFaces(path string) ([]fs.FileInfo, error) {
 			fmt.Println("Error from close (src): ", err)
 			log.Fatal(err)
 		}
-
-		//fmt.Println("do the sizes match?  f.size and c_size")
-		//fmt.Println(f.Size())
-		//fmt.Println(c_size)
-
-		fmt.Println("new image file created in : " + path + imagesDir + f.Name())
 	}
-	return memFaces, nil
+	return nil
 }
 
 func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
