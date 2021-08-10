@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,11 +19,14 @@ import (
 	matchclient "github.com/vnkeaton/biometric-match-client"
 )
 
+var storer *memory.Storage
+var origin billy.Filesystem
+
 const (
 	//facesURL  = "https://github.com/TheMdTF/mdtf-public/tree/master/rally2-matching-system/tests/test-routine-images/face"
 	facesURL  = "https://github.com/TheMdTF/mdtf-public"
 	imagesDir = "/images/"
-	repoDir   = "/tree/master/rally2-matching-system/tests/test-routine-images/face"
+	repoDir   = "/rally2-matching-system/tests/test-routine-images/face"
 )
 
 type MatchScoreData struct {
@@ -46,16 +50,16 @@ func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
 	return append(ret, arr[index+1:]...)
 }
 
-//func mustOpen(f string) *os.File {
-func mustOpen(p string, f string) string {
-	filename := p + imagesDir + f
-	//fmt.Println("check to see if filename exists with mustOpen for: " + filename)
-	_, err := os.Open(filename)
+//func mustOpen(f string) {
+func mustOpen(f string) string {
+
+	fmt.Println("check to see if filename exists with mustOpen for: " + f)
+	_, err := origin.Open(f)
 	if err != nil {
-		fmt.Println("This file failed upon mustOpen: " + filename)
+		fmt.Println("This file failed upon mustOpen: " + f)
 		log.Fatal(err)
 	}
-	return filename
+	return f
 }
 
 func checkError(err error) {
@@ -65,6 +69,9 @@ func checkError(err error) {
 }
 
 func main() {
+	storer = memory.NewStorage()
+	origin = memfs.New()
+
 	matchclient.Hello("IDSL")
 
 	path, err := os.Getwd()
@@ -74,19 +81,18 @@ func main() {
 	}
 
 	//get the faces repo
-	/*downloadFaces(path)
+	imageFaces, err := downloadFaces(path)
 	if err != nil {
 		fmt.Println("Error from downloadFaces  ", err)
 		log.Fatal(err)
 	}
 	fmt.Println("faces downloaded")
-	*/
 
 	//fmt.Println("working directory is: " + path)
 
 	//read in list of images
 	//fmt.Println("read in list of images from: " + path + imagesDir)
-	imageFaces, err := ioutil.ReadDir(path + imagesDir)
+	imageFaces, err = ioutil.ReadDir(path + imagesDir)
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
@@ -106,8 +112,10 @@ func main() {
 		//triangular comparison for comparing unique files - do not assume the match operation is symmetric
 		//revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
-			//fmt.Println("Comparing " + f.Name() + " with " + r.Name())
-			mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, r.Name())}
+			fmt.Println("Comparing " + path + imagesDir + f.Name() + " with " + path + imagesDir + r.Name())
+			//mediaFiles := []string{mustOpen(path + imagesDir + f.Name()), mustOpen(path + imagesDir + r.Name())}
+			mediaFiles := []string{path + imagesDir + f.Name(), path + imagesDir + r.Name()}
+			//mediaFiles := []string{mustOpen(repoDir, f.Name()), mustOpen(repoDir, r.Name())}
 			//matchScore, err := matchclient.MatchFiles(mediaFiles)
 			_, err := matchclient.MatchFiles(mediaFiles)
 			if err != nil {
@@ -138,9 +146,7 @@ func main() {
 
 }
 
-func downloadFaces(path string) error {
-	var storer *memory.Storage
-	var origin billy.Filesystem
+func downloadFaces(path string) ([]fs.FileInfo, error) {
 
 	storer = memory.NewStorage()
 	origin = memfs.New()
@@ -152,7 +158,7 @@ func downloadFaces(path string) error {
 	fmt.Println("Repository cloned")
 
 	//read in list of images
-	memFaces, err := origin.ReadDir("/rally2-matching-system/tests/test-routine-images/face")
+	memFaces, err := origin.ReadDir(repoDir)
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
@@ -163,9 +169,24 @@ func downloadFaces(path string) error {
 
 	fmt.Println("we have a list of image files from the repository")
 
+	/*for _, f := range memFaces {
+		fmt.Println("image file:" + f.Name())
+		fmt.Println("can I open them?")
+		_, err := origin.Open(repoDir + "/" + f.Name())
+		if err != nil {
+			fmt.Println("NO!  Can not open.  DAMN")
+		} else {
+			fmt.Println("YEA!  It opened!")
+		}
+	}
+	return memFaces, nil
+	*/
+
+	fmt.Println("what is path + imagesDir: " + path + imagesDir)
 	if _, err := os.Stat(path + imagesDir); os.IsNotExist(err) {
 		err := os.Mkdir(path+imagesDir, 0755)
-		checkError(err)
+		fmt.Println("error mkdir for " + path + imagesDir)
+		fmt.Println(err)
 	}
 	fmt.Println("new images directory created")
 
@@ -174,49 +195,50 @@ func downloadFaces(path string) error {
 		fmt.Println(f.Size())
 
 		ext := filepath.Ext(f.Name())
-		if ext == ".png" {
-			fmt.Println("ext is .png")
-
-			//open a file
-			src, err := origin.Open(f.Name())
-			if err != nil {
-				fmt.Println("Error from open: ", err)
-				log.Fatal(err)
-			}
-
-			//create a new file
-			dst, err := os.Create(f.Name())
-			if err != nil {
-				fmt.Println("Error from create: ", err)
-				log.Fatal(err)
-			}
-
-			//copy file to disk
-			_, err = io.Copy(dst, src)
-			if err != nil {
-				fmt.Println("Error from copy: ", err)
-				log.Fatal(err)
-			}
-
-			if err := dst.Close(); err != nil {
-				fmt.Println("Error from close (dist): ", err)
-				log.Fatal(err)
-			}
-
-			if err := src.Close(); err != nil {
-				fmt.Println("Error from close (src): ", err)
-				log.Fatal(err)
-			}
-
-			/*fmt.Println("do the sizes match?  f.size and n")
-			fmt.Println(f.Size())
-			fmt.Println(nsize)
-			*/
-
-			fmt.Println("new image file created in : " + path + imagesDir + f.Name())
+		if ext != ".png" {
+			break
 		}
+
+		fmt.Println("ext is .png")
+
+		//open a file
+		src, err := origin.Open(repoDir + "/" + f.Name())
+		if err != nil {
+			fmt.Println("Error from open: ", err)
+			log.Fatal(err)
+		}
+
+		//create a new file
+		dst, err := os.Create(path + imagesDir + "/" + f.Name())
+		if err != nil {
+			fmt.Println("Error from create: ", err)
+			log.Fatal(err)
+		}
+
+		//copy file to disk
+		_, err = io.Copy(dst, src)
+		if err != nil {
+			fmt.Println("Error from copy: ", err)
+			log.Fatal(err)
+		}
+
+		if err := dst.Close(); err != nil {
+			fmt.Println("Error from close (dist): ", err)
+			log.Fatal(err)
+		}
+
+		if err := src.Close(); err != nil {
+			fmt.Println("Error from close (src): ", err)
+			log.Fatal(err)
+		}
+
+		//fmt.Println("do the sizes match?  f.size and c_size")
+		//fmt.Println(f.Size())
+		//fmt.Println(c_size)
+
+		fmt.Println("new image file created in : " + path + imagesDir + f.Name())
 	}
-	return nil
+	return memFaces, nil
 }
 
 func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
