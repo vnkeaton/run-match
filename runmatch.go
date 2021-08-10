@@ -1,18 +1,18 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"image/png"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 
+	tabby "github.com/cheynewallace/tabby"
 	billy "github.com/go-git/go-billy/v5"
 	memfs "github.com/go-git/go-billy/v5/memfs"
+
+	//afero "github.com/spf13/afero"
 	git "github.com/go-git/go-git/v5"
 	memory "github.com/go-git/go-git/v5/storage/memory"
 	matchclient "github.com/vnkeaton/biometric-match-client"
@@ -49,7 +49,7 @@ func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
 //func mustOpen(f string) *os.File {
 func mustOpen(p string, f string) string {
 	filename := p + imagesDir + f
-	fmt.Println("check to see if filename exists with mustOpen for: " + filename)
+	//fmt.Println("check to see if filename exists with mustOpen for: " + filename)
 	_, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("This file failed upon mustOpen: " + filename)
@@ -79,12 +79,13 @@ func main() {
 		fmt.Println("Error from downloadFaces  ", err)
 		log.Fatal(err)
 	}
-	fmt.Println("faces downloaded")*/
+	fmt.Println("faces downloaded")
+	*/
 
-	fmt.Println("working directory is: " + path)
+	//fmt.Println("working directory is: " + path)
 
 	//read in list of images
-	fmt.Println("read in list of images from: " + path + imagesDir)
+	//fmt.Println("read in list of images from: " + path + imagesDir)
 	imageFaces, err := ioutil.ReadDir(path + imagesDir)
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
@@ -105,18 +106,19 @@ func main() {
 		//triangular comparison for comparing unique files - do not assume the match operation is symmetric
 		//revFiles = RemoveIndex(revFiles, len(revFiles)-1)
 		for _, r := range revFiles {
-			fmt.Println("Comparing " + f.Name() + " with " + r.Name())
+			//fmt.Println("Comparing " + f.Name() + " with " + r.Name())
 			mediaFiles := []string{mustOpen(path, f.Name()), mustOpen(path, r.Name())}
-			//mediaFiles := []string{f.Name(), r.Name()}
-			fmt.Println("calling match client....")
-			matchScore, err := matchclient.MatchFiles(mediaFiles)
+			//matchScore, err := matchclient.MatchFiles(mediaFiles)
+			_, err := matchclient.MatchFiles(mediaFiles)
 			if err != nil {
 				fmt.Println("error from matchclient")
 				log.Fatal(err)
 			}
-			s, _ := json.MarshalIndent(matchScore, "", "\t")
+			//print out json
+			/*s, _ := json.MarshalIndent(matchScore, "", "\t")
 			fmt.Print(string(s))
 			fmt.Print("\n")
+			*/
 		}
 	}
 
@@ -125,33 +127,39 @@ func main() {
 	if err != nil {
 		fmt.Println("error from matchclient getting all match score data")
 	}
-	s, _ := json.MarshalIndent(allMatchScores, "", "\t")
+	//Print out Json
+	/*s, _ := json.MarshalIndent(allMatchScores, "", "\t")
 	fmt.Print(string(s))
 	fmt.Print("\n")
+	*/
+
+	//Print out table
+	ShowTable(allMatchScores)
 
 }
 
 func downloadFaces(path string) error {
 	var storer *memory.Storage
-	var fs billy.Filesystem
+	var origin billy.Filesystem
 
 	storer = memory.NewStorage()
-	fs = memfs.New()
-	_, err := git.Clone(storer, fs, &git.CloneOptions{
+	origin = memfs.New()
+
+	_, err := git.Clone(storer, origin, &git.CloneOptions{
 		URL: facesURL,
 	})
 	checkError(err)
 	fmt.Println("Repository cloned")
 
 	//read in list of images
-	memFaces, err := fs.ReadDir("/rally2-matching-system/tests/test-routine-images/face")
+	memFaces, err := origin.ReadDir("/rally2-matching-system/tests/test-routine-images/face")
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
 	}
 	//file, err := fs.Open("/rally2-matching-system/tests/test-routine-images/face/1.png")
 	//fmt.Println("we have an image file: " + file.Name())
-	checkError(err)
+	//checkError(err)
 
 	fmt.Println("we have a list of image files from the repository")
 
@@ -169,50 +177,58 @@ func downloadFaces(path string) error {
 		if ext == ".png" {
 			fmt.Println("ext is .png")
 
-			infile, err := os.Open(f.Name())
+			//open a file
+			src, err := origin.Open(f.Name())
 			if err != nil {
-				fmt.Println("Error from open ", err)
-				log.Fatal(err)
-			}
-			defer infile.Close()
-			fmt.Println("open infile:" + f.Name())
-
-			//decode
-			src, err := png.Decode(infile)
-			if err != nil {
-				fmt.Println("Error from decode infile ", err)
-				log.Fatal(err)
-			}
-			fmt.Println("infile decoded ")
-
-			//encode to images dir
-			var imageBuf bytes.Buffer
-			err = png.Encode(&imageBuf, src)
-			if err != nil {
-				fmt.Println("Error from encode ", err)
-				log.Fatal(err)
-			}
-			fmt.Println("encode to outfile ")
-
-			//create file
-			outfile, err := os.Create(path + imagesDir + f.Name())
-			if err != nil {
-				fmt.Println("Error from create output file  ", err)
-				log.Fatal(err)
-			}
-			fw := bufio.NewWriter(outfile)
-			n, err := fw.Write(imageBuf.Bytes())
-			if err != nil {
-				fmt.Println("Error from Write buf ", err)
+				fmt.Println("Error from open: ", err)
 				log.Fatal(err)
 			}
 
-			fmt.Println("do the sizes match?  f.size and n")
+			//create a new file
+			dst, err := os.Create(f.Name())
+			if err != nil {
+				fmt.Println("Error from create: ", err)
+				log.Fatal(err)
+			}
+
+			//copy file to disk
+			_, err = io.Copy(dst, src)
+			if err != nil {
+				fmt.Println("Error from copy: ", err)
+				log.Fatal(err)
+			}
+
+			if err := dst.Close(); err != nil {
+				fmt.Println("Error from close (dist): ", err)
+				log.Fatal(err)
+			}
+
+			if err := src.Close(); err != nil {
+				fmt.Println("Error from close (src): ", err)
+				log.Fatal(err)
+			}
+
+			/*fmt.Println("do the sizes match?  f.size and n")
 			fmt.Println(f.Size())
-			fmt.Println(n)
+			fmt.Println(nsize)
+			*/
 
 			fmt.Println("new image file created in : " + path + imagesDir + f.Name())
 		}
 	}
 	return nil
+}
+
+func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
+
+	fmt.Println("")
+	fmt.Println("Match Score Comparisons:")
+
+	t := tabby.New()
+	t.AddHeader("FILENAME_1", "FILENAME_2", "MATCH_SCORE")
+	for _, line := range allMatchScores {
+		t.AddLine(line.File1Name, line.File2Name, line.MatchScore)
+	}
+	t.Print()
+
 }
