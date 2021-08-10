@@ -27,31 +27,7 @@ const (
 	repoDir   = "/rally2-matching-system/tests/test-routine-images/face"
 )
 
-type MatchScoreData struct {
-	FileName1  string
-	FileName2  string
-	FatchScore float64
-}
-
-func reverseArray(arr []os.FileInfo) []os.FileInfo {
-	// reverse file name array
-	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
-		arr[i], arr[j] = arr[j], arr[i]
-	}
-	return arr
-}
-
-func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
-	//return append(arr[:index], arr[index+1:]...)
-	ret := make([]os.FileInfo, 0)
-	ret = append(ret, arr[:index]...)
-	return append(ret, arr[index+1:]...)
-}
-
 func main() {
-	storer = memory.NewStorage()
-	origin = memfs.New()
-
 	matchclient.Hello("IDSL")
 
 	//get the faces repo
@@ -68,16 +44,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	//arrays are immutable
 	revFiles, err := ioutil.ReadDir(imagesDir)
 	if err != nil {
 		fmt.Println("Error from read dir rev files ", err)
 		log.Fatal(err)
 	}
-
 	//reverse the list of names
 	reverseArray(revFiles)
 
-	//match each file
+	//match each image file to the other
 	for _, f := range imageFaces {
 		//triangular comparison for comparing unique files - do not assume the match operation is symmetric
 		//revFiles = RemoveIndex(revFiles, len(revFiles)-1)
@@ -113,11 +89,13 @@ func main() {
 
 }
 
+// Downlod image file from git repo
 func downloadFaces() error {
 
 	storer = memory.NewStorage()
 	origin = memfs.New()
 
+	//clone the repo
 	_, err := git.Clone(storer, origin, &git.CloneOptions{
 		URL: facesURL,
 	})
@@ -126,13 +104,14 @@ func downloadFaces() error {
 		log.Fatal(err)
 	}
 
-	//read in list of images
+	//read in list of images from repo file system
 	memFaces, err := origin.ReadDir(repoDir)
 	if err != nil {
 		fmt.Println("Error from read dir  ", err)
 		log.Fatal(err)
 	}
 
+	//create tmp dir
 	if _, err := os.Stat(imagesDir); os.IsNotExist(err) {
 		err := os.Mkdir(imagesDir, 0755)
 		if err != nil {
@@ -142,37 +121,40 @@ func downloadFaces() error {
 	}
 
 	for _, f := range memFaces {
+		//only interested in png files
 		ext := filepath.Ext(f.Name())
 		if ext != ".png" {
 			break
 		}
 
-		//open a file
+		//open a file from repo file system
 		src, err := origin.Open(repoDir + "/" + f.Name())
 		if err != nil {
 			fmt.Println("Error from open: ", err)
 			log.Fatal(err)
 		}
 
-		//create a new file
+		//create a new file in tmp
 		dst, err := os.Create(imagesDir + "/" + f.Name())
 		if err != nil {
 			fmt.Println("Error from create: ", err)
 			log.Fatal(err)
 		}
 
-		//copy file to disk
+		//copy file to tmp
 		_, err = io.Copy(dst, src)
 		if err != nil {
 			fmt.Println("Error from copy: ", err)
 			log.Fatal(err)
 		}
 
+		//close tmp file
 		if err := dst.Close(); err != nil {
 			fmt.Println("Error from close (dist): ", err)
 			log.Fatal(err)
 		}
 
+		//close repo file
 		if err := src.Close(); err != nil {
 			fmt.Println("Error from close (src): ", err)
 			log.Fatal(err)
@@ -181,6 +163,24 @@ func downloadFaces() error {
 	return nil
 }
 
+// ReverseArray originally used to triangular comparison - no duplicate compares
+func reverseArray(arr []os.FileInfo) []os.FileInfo {
+	// reverse file name array
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+	return arr
+}
+
+// RemoveIndex remove a given index from the array
+func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
+	//return append(arr[:index], arr[index+1:]...)
+	ret := make([]os.FileInfo, 0)
+	ret = append(ret, arr[:index]...)
+	return append(ret, arr[index+1:]...)
+}
+
+// ShowTable prints out a simple table for the match scores
 func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
 
 	fmt.Println("")
@@ -192,5 +192,4 @@ func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
 		t.AddLine(line.File1Name, line.File2Name, line.MatchScore)
 	}
 	t.Print()
-
 }
