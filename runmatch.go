@@ -65,11 +65,6 @@ func main() {
 				fmt.Println("error from matchclient")
 				log.Fatal(err)
 			}
-			//print out json
-			/*s, _ := json.MarshalIndent(matchScore, "", "\t")
-			fmt.Print(string(s))
-			fmt.Print("\n")
-			*/
 		}
 	}
 
@@ -78,11 +73,6 @@ func main() {
 	if err != nil {
 		fmt.Println("error from matchclient getting all match score data")
 	}
-	//Print out Json
-	/*s, _ := json.MarshalIndent(allMatchScores, "", "\t")
-	fmt.Print(string(s))
-	fmt.Print("\n")
-	*/
 
 	//Print out table
 	ShowTable(allMatchScores)
@@ -181,14 +171,14 @@ func RemoveIndex(arr []os.FileInfo, index int) []os.FileInfo {
 }
 
 // ShowTable prints out a simple table for the match scores
-func ShowTable(allMatchScores matchclient.AllMatchScoresResponse) {
+func ShowTable(matchScores []matchclient.AllMatchScoreData) {
 
 	fmt.Println("")
 	fmt.Println("Match Score Comparisons:")
 
 	t := tabby.New()
 	t.AddHeader("FILENAME_1", "FILENAME_2", "MATCH_SCORE")
-	for _, line := range allMatchScores {
+	for _, line := range matchScores {
 		t.AddLine(line.File1Name, line.File2Name, line.MatchScore)
 	}
 	t.Print()
